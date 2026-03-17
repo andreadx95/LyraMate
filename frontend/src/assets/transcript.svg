@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Livello_2" data-name="Livello 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 27.61 25.37">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: url(#Sfumatura_senza_nome_14);
+        fill-rule: evenodd;
+      }
+    </style>
+    <linearGradient id="Sfumatura_senza_nome_14" data-name="Sfumatura senza nome 14" x1="1.33" y1="1.29" x2="22.66" y2="22.62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e9cd7"/>
+      <stop offset=".99" stop-color="#005b97"/>
+    </linearGradient>
+  </defs>
+  <g id="Livello_1-2" data-name="Livello 1">
+    <path class="cls-1" d="M26.3,1.31c-.81-.81-1.92-1.31-3.14-1.31H4.45c-1.22,0-2.33.5-3.14,1.31h0c-.81.81-1.31,1.92-1.31,3.14v20.13h0c0,.16.05.32.15.46.25.36.75.44,1.11.19l6.95-4.94h14.96c1.23,0,2.34-.5,3.14-1.31.81-.81,1.31-1.93,1.31-3.16V4.45c0-1.22-.5-2.34-1.31-3.14Z"/>
+  </g>
+</svg>

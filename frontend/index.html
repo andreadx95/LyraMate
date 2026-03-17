@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>LyraMate</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <link rel="stylesheet" href="/src/assets/styles.css" />
+  </head>
+
+  <body id="drop-zone">
+    <!-- Settings Modal -->
+    <div id="settings-overlay" class="hidden ">
+      <div id="settings-modal" class="tilt-in-fwd-tr">
+        <img src="/assets/logo.svg" alt="" srcset="" style="width: 80px; display:block; margin:10px auto"/>
+        <label for="api-url-input">Backend URL</label>
+        <input id="api-url-input" type="text" placeholder="http://localhost:8000"/>
+        <label for="webcam-select">Webcam</label>
+        <select id="webcam-select"><option value="">Default</option></select>
+        <label for="mic-select">Microphone</label>
+        <select id="mic-select"><option value="">Default</option></select>
+        <button id="settings-save-btn">Save</button>
+      </div>
+    </div>
+
+    <!-- Loading screen -->
+    <div id="loading">
+      <div></div>
+      <div class="spinner"></div>
+    </div>
+
+    <!-- VRM Canvas -->
+    <canvas id="vrm-canvas" class=""></canvas>
+
+    <!-- Status -->
+    <div id="status"></div>
+
+    <!-- Transcript -->
+    <div id="transcript"></div>
+
+    <!-- Controls -->
+    <div id="controls">
+      <div id="settings-btn" title="Settings" class="hidden-commands controls-button"><img src="/src/assets/settings.svg" alt="" srcset=""></div>
+      <div id="webcam-btn" title="Toggle Webcam" class="hidden-commands controls-button"><img src="/src/assets/webcam.svg" alt="" srcset=""></div>
+      <img id="image-element" class="controls-button" src="" alt="" title="Click to Remove"/>
+      <div id="mic-btn" title="" class="controls-button"></div>
+    </div>
+
+    <!-- Audio player (nascosto) -->
+    <audio id="audio-player" style="display: none"></audio>
+<video id="webcam" autoplay playsinline muted style="height: 50%;" class="hidden tilt-in-fwd-tr"></video>
+    
+
+
+  <script type="module" src="/src/main.ts"></script>
+
+  </body>
+</html>

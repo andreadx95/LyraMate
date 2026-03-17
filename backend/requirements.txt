@@ -1,0 +1,23 @@
+# LLM
+ollama
+
+# STT
+faster-whisper
+pyaudio
+
+# TTS
+piper-tts
+pathvalidate
+
+# API Server
+fastapi
+uvicorn[standard]
+python-multipart
+websockets
+
+# Utilities
+python-dotenv
+pydantic
+
+# Torch
+torch

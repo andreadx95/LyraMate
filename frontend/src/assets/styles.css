@@ -1,0 +1,390 @@
+:root {
+  --primary-color: #08679f;
+  --secondary-color: #1c6bff;
+  --background-color: #ffffff;
+  --text-color: #08679f;
+}
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Open Sans",
+    "Helvetica Neue",
+    sans-serif;
+  overflow: hidden;
+  background: transparent;
+  border: 1px transparent solid;
+}
+
+body:hover {
+  border: 1px dashed #0066ff60;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#vrm-canvas {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+#vrm-canvas.webcam-active {
+  max-height: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.267);
+  background: url(/assets/room.png);
+  background-size: cover;
+  border-radius: 15px;
+  position: absolute;
+  top: 50%;
+}
+
+#controls {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  gap: 15px;
+  background-color: var(--background-color);
+  padding: 5px;
+  border-radius: 20px;
+  border: 1px solid #fff4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+#controls .controls-button {
+  width: 15px;
+  height: 15px;
+}
+
+#controls:hover .hidden-commands {
+  display: block;
+}
+
+#controls .hidden-commands {
+  display: none;
+}
+
+#webcam {
+  border-radius: 15px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.267);
+  max-height: 50%;
+  background-color: #000000;
+  margin: 0;
+  width: 100%;
+}
+
+#mic-btn {
+  display: none;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.384);
+  color: white;
+  font-size: 26px;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#mic-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+#mic-btn:active {
+  transform: scale(0.95);
+}
+
+#mic-btn.recording {
+  background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%);
+  animation: pulse 1s infinite;
+}
+
+#image-element {
+  bottom: 20px;
+  z-index: 1000;
+  border-radius: 2px;
+  object-fit: cover;
+  background-color: white;
+  display: none;
+}
+
+#status {
+  position: fixed;
+  opacity: 0;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 15px 30px;
+  border-radius: 25px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  font-size: 10px;
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+
+#transcript {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  margin: 0 auto;
+  padding: 0px;
+  z-index: 10;
+/*   display: none; */
+  max-height: 150px;
+  overflow-y: auto;
+  scrollbar-width: none; /* hide */
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+#transcript:hover {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.transcript-text {
+  margin: 5px auto;
+  width: 90%;
+  padding: 10px 15px;
+  border-radius: 15px;
+  font-size: 0.7rem;
+  line-height: 1rem;
+  color: white;
+}
+
+@media (max-width: 600px) {
+  .transcript-text {
+    width: 70%;
+  }
+}
+
+.user-text {
+  background: var(--primary-color);
+  color: white;
+  overflow-y: auto;
+  scrollbar-width: none; /* nasconde scrollbar */
+  -ms-overflow-style: none; /* per IE e Edge Legacy */
+  max-width: 500px;
+}
+
+.ai-text {
+  background: var(--background-color);
+  color: var(--text-color);
+  overflow-y: auto;
+  scrollbar-width: none; /* nasconde scrollbar */
+  -ms-overflow-style: none; /* per IE e Edge Legacy */
+  max-width: 500px;
+}
+#loading {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.95);
+  padding: 30px 50px;
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  text-align: center;
+  font-size: 18px;
+}
+
+.spinner {
+  border: 4px solid #000000;
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 20px auto 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Settings */
+#settings-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+#settings-btn:hover {
+  transform: scale(1.1);
+}
+
+#settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#settings-modal {
+  background: var(--background-color);
+  border-radius: 12px;
+  padding: 20px;
+  width: 240px;
+  color: var(--text-color);
+  font-size: 12px;
+}
+
+#settings-modal h3 {
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+#settings-modal label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-color);
+}
+
+#settings-modal input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #ececec;
+  background: var(--background-color);
+  color: var(--text-color);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+#settings-modal select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #ececec;
+  background: var(--background-color);
+  color: var(--text-color);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+#settings-modal button {
+  width: 100%;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  background: var(--primary-color);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#settings-modal button:hover {
+  background: var(--secondary-color);
+}
+
+.tilt-in-fwd-tr {
+  -webkit-animation: tilt-in-fwd-tr 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)
+    both;
+  animation: tilt-in-fwd-tr 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ----------------------------------------------
+ * Generated by Animista on 2026-3-12 0:27:36
+ * Licensed under FreeBSD License.
+ * See http://animista.net/license for more info. 
+ * w: http://animista.net, t: @cssanimista
+ * ---------------------------------------------- */
+
+/**
+ * ----------------------------------------
+ * animation tilt-in-fwd-tr
+ * ----------------------------------------
+ */
+@-webkit-keyframes tilt-in-fwd-tr {
+  0% {
+    -webkit-transform: rotateY(20deg) rotateX(35deg) translate(300px, -300px)
+      skew(-35deg, 10deg);
+    transform: rotateY(20deg) rotateX(35deg) translate(300px, -300px)
+      skew(-35deg, 10deg);
+    opacity: 0;
+  }
+  100% {
+    -webkit-transform: rotateY(0) rotateX(0deg) translate(0, 0) skew(0deg, 0deg);
+    transform: rotateY(0) rotateX(0deg) translate(0, 0) skew(0deg, 0deg);
+    opacity: 1;
+  }
+}
+@keyframes tilt-in-fwd-tr {
+  0% {
+    -webkit-transform: rotateY(20deg) rotateX(35deg) translate(300px, -300px)
+      skew(-35deg, 10deg);
+    transform: rotateY(20deg) rotateX(35deg) translate(300px, -300px)
+      skew(-35deg, 10deg);
+    opacity: 0;
+  }
+  100% {
+    -webkit-transform: rotateY(0) rotateX(0deg) translate(0, 0) skew(0deg, 0deg);
+    transform: rotateY(0) rotateX(0deg) translate(0, 0) skew(0deg, 0deg);
+    opacity: 1;
+  }
+}
