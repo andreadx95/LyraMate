@@ -56,8 +56,8 @@ async def startup_event():
     print("🚀 Initializing LyraMate...")
     # STT
     try:
-        print("📝 Loading Whisper..." + os.getenv("WHISPER_MODEL", "base"))
-        stt = SpeechToText(model_size=os.getenv("WHISPER_MODEL", "base"))
+        print("📝 Loading Whisper: " + os.getenv("WHISPER_MODEL", "base") + " on " + os.getenv("WHISPER_DEVICE", "cuda"))
+        stt = SpeechToText(model_size=os.getenv("WHISPER_MODEL", "base"), device=os.getenv("WHISPER_DEVICE", "cuda"))
     except Exception as e:
         print(f"❌ STT unavailable: {e}")
         print("   Speech recognition will be disabled.")
