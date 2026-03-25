@@ -169,6 +169,21 @@ npm run tauri build
 
 Output: standalone executable in `frontend/src-tauri/target/release/bundle/`
 
+
+
+## LyraMate Usage
+
+When you first load the LyraMate frontend, it will prompt you to provide the Backend Endpoint.
+
+It will also request access to your microphone and webcam (webcam is only used with multimodal models).
+
+### How to Interact
+Talk: Hold Shift + Space or click the dot on the GUI.
+
+Images: With multimodal models, you can drag & drop images onto Lyra or use Ctrl + V to paste.
+
+Meeting Mode: Ask Lyra to analyze images in real-time through your camera.
+
 ## Customization
 
 ### Change the avatar model... if you don't like Lyra... 😔
