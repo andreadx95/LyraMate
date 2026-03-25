@@ -65,7 +65,6 @@ Recommendations:
 - **Node.js** 18+
 - **Rust** (for Tauri build) — [rustup.rs](https://rustup.rs/)
 - **Ollama** — [ollama.com/download](https://ollama.com/download)
-- **Piper TTS** — installed and accessible from terminal ([installation guide](https://github.com/rhasspy/piper#installation))
 
 ## Installation
 
