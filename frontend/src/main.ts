@@ -37,6 +37,7 @@ const webcam = new WebcamManager(
   document.getElementById("vrm-canvas"),
   savedDeviceId
 );
+
 const recorder = new AudioRecorder({
   deviceId: localStorage.getItem("mic_device_id") || undefined,
   onStart: () => {
@@ -73,6 +74,7 @@ async function toggleCamera() {
 
 
 
+
 // ========== AUDIO RECORDING ==========
 async function startRecording() {
   audioPlayer.pause();
@@ -85,10 +87,10 @@ function stopRecording() {
 }
 
 async function sendAudioToBackend(audioBlob) {
+  const audioData = new FormData();
   const formData = new FormData();
-  formData.append("audio", audioBlob, "recording.wav");
+  audioData.append("audio", audioBlob, "recording.wav");
 
-  // If webcam is active, capture the last frame
   if (webcam.isActive && imageObject === null) {
     const frameBlob = await webcam.captureFrame();
     if (frameBlob) {
@@ -102,24 +104,35 @@ async function sendAudioToBackend(audioBlob) {
     // think
     avatar.setAnimationState("thinking");
 
-    const response = await fetch(`${API_URL}/voice-chat`, {
+    const transcriptionResponse = await fetch(`${API_URL}/voice-transcribe`, {
       method: "POST",
-      body: formData,
+      body: audioData,
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    if (!transcriptionResponse.ok) {
+      throw new Error(`HTTP error! status: ${transcriptionResponse.status}`);
     }
 
-    const data = await response.json();
-    console.log("Risposta backend:", data);
+    const dataTranscription = await transcriptionResponse.json();
+    console.log("Risposta backend:", dataTranscription);
 
     statusDiv.classList.remove("processing");
 
     // Mostra trascrizione
- 
-    showTranscript(data.transcription, data.response);
-    
+    if (dataTranscription.transcription) {
+      addTranscriptEntry(dataTranscription.transcription, true);
+    }
+
+    formData.append("text", dataTranscription.transcription);
+
+    const LLMResponse = await fetch(`${API_URL}/voice-chat`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!LLMResponse.ok) {
+      throw new Error(`HTTP error! status: ${LLMResponse.status}`);
+    }
+    const data = await LLMResponse.json();
 
     // Riproduci audio risposta e avvia lip sync
     if (data.audio_file) {
@@ -127,6 +140,11 @@ async function sendAudioToBackend(audioBlob) {
       playAudio(`${API_URL}${data.audio_file}`);
       avatar.doLipSync(data.response, audioPlayer);
     }
+
+    if (data.response) {
+      addTranscriptEntry(data.response, false);
+    }
+
 
     // Torna a idle dopo il parlato
     setTimeout(
@@ -139,17 +157,10 @@ async function sendAudioToBackend(audioBlob) {
     console.error("Errore comunicazione backend:", error);
     statusDiv.classList.remove("processing");
     avatar.setAnimationState("idle");
-    showTranscript('', "❌ Mmm, something went wrong...");
+    addTranscriptEntry("❌ Mmm, something went wrong...", false);
   }
 }
 
-function showTranscript(userText, aiText) {
-  transcriptDiv.style.display = "block";
-  addTranscriptEntry(userText, true);
-  if (aiText) addTranscriptEntry(aiText, false);
-
-
-}
 
 function addTranscriptEntry(text, isUser = true) {
   if (!text) return;
@@ -265,6 +276,8 @@ document.addEventListener("paste", (event) => {
 webcamBtn.addEventListener("click", () => {
   toggleCamera();
 });
+
+
 
 // ========== SETTINGS ==========
 async function populateWebcamSelect() {

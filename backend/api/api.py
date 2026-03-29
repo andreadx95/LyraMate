@@ -107,67 +107,15 @@ async def root():
         }
     }
 
-@app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@app.post("/voice-transcribe")
+async def voice_transcribe(audio: UploadFile = File(...)):
     """
-    Text chat endpoint
-    Input: text
-    Output: response + audio
-    """
-    if llm is None:
-        return ChatResponse(
-            response="LLM model is unavailable. Make sure Ollama is running.",
-            audio_file=None
-        )
-    
-    user_message = request.message
-    
-    # Check if user requests reset
-    if "reset" in user_message.lower():
-        llm.reset_conversation()
-        response_text = "Conversation reset!"
-    else:
-        # LLM generates response (async)
-        llm_response = await llm.chat_async(user_message)
-        response_text = llm_response["response"]
-    
-    # Generate response audio
-    audio_file = None
-    if response_text:
-        audio_path = TEMP_AUDIO_DIR / f"response_{hash(response_text)}.wav"
-        audio_path.parent.mkdir(exist_ok=True)
-        
-        try:
-            await tts.synthesize_async(response_text, output_file=str(audio_path))
-            audio_file = f"/audio/{audio_path.name}"
-        except Exception as e:
-            print(f"TTS Error: {e}")
-    
-    return ChatResponse(
-        response=response_text,
-        audio_file=audio_file
-    )
-
-@app.post("/voice-chat")
-async def voice_chat(
-    audio: UploadFile = File(...),
-    image: Optional[UploadFile] = File(None),
-):
-    """
-    Voice chat endpoint (with optional vision)
-    Input: audio file + optional image
-    Output: text response + audio
+    Voice transcription endpoint
+    Input: audio file
+    Output: transcription (text)
     """
     if stt is None:
-        return {"error": "STT unavailable. Whisper was not loaded.", "transcription": None, "response": None, "audio_file": None}
-    if llm is None:
-        return {"error": "LLM unavailable. Make sure Ollama is running.", "transcription": None, "response": None, "audio_file": None}
-
-    # If image provided, encode to base64
-    image_b64 = None
-    if image is not None:
-        image_bytes = await image.read()
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        return {"error": "STT unavailable. Whisper was not loaded.", "transcription": None}
 
     # Read audio into memory
     audio_bytes = await audio.read()
@@ -180,13 +128,36 @@ async def voice_chat(
 
     # STT: audio -> text
     try:
-        user_message = await stt.transcribe_file_async(temp_audio)
+        transcription = await stt.transcribe_file_async(temp_audio)
     except Exception as e:
         print(f"❌ STT Error: {e}")
         temp_audio.unlink(missing_ok=True)
-        return {"error": f"Audio transcription error: {e}", "transcription": None, "response": None, "audio_file": None}
+        return {"error": f"Audio transcription error: {e}", "transcription": None}
 
     temp_audio.unlink(missing_ok=True)
+    return {"transcription": transcription}
+
+@app.post("/voice-chat")
+async def voice_chat(
+    text: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+):
+    """
+    Voice chat endpoint (with optional vision)
+    Input: text + optional image
+    Output: text response + audio
+    """
+    if llm is None:
+        return {"error": "LLM unavailable. Make sure Ollama is running.", "transcription": None, "response": None, "audio_file": None}
+
+    # If image provided, encode to base64
+    image_b64 = None
+    if image is not None:
+        image_bytes = await image.read()
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    user_message = text or ""
+    
     print(f"👤 User{' (vision+voice)' if image_b64 else ''}: {user_message}")
 
     # Check if user requests reset
