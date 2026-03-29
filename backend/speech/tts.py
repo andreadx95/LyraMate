@@ -105,7 +105,7 @@ To download model {self.voice}:
     
     def sanitize_text(self, text):
         # Rimuove emoji e simboli non ASCII
-        return re.sub(r'[^\x00-\x7F]+', '', text)
+         return re.sub(r'[^\x00-\x7F]+|\*', '', text)
 
 
     def play_audio(self, audio_path):

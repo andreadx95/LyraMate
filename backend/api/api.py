@@ -160,6 +160,7 @@ async def voice_chat(
     
     print(f"👤 User{' (vision+voice)' if image_b64 else ''}: {user_message}")
 
+    extracted_code = None
     # Check if user requests reset
     if "reset" in user_message.lower():
         llm.reset_conversation()
@@ -170,7 +171,7 @@ async def voice_chat(
         if image_b64:
             kwargs["images"] = [image_b64]
         llm_response = await llm.chat_async(user_message, **kwargs)
-        response_text = llm_response["response"].replace("**", "")
+        response_text = llm_response["response"]
         print(f"🤖 RAW AI: {response_text}")
         extracted_code = extract_code(response_text)
         if isinstance(extracted_code, list) and extracted_code:
