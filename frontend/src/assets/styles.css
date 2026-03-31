@@ -161,7 +161,7 @@ body:hover {
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
+  width: 90%;
   margin: 0 auto;
   padding: 0px;
   z-index: 10;
@@ -171,6 +171,16 @@ body:hover {
   scrollbar-width: none; /* hide */
   opacity: 1;
   transition: opacity 0.3s ease;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0%) 0%,
+    rgb(0 0 0) 20%
+  );
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0%) 0%, rgb(0 0 0) 20%);
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
 }
 #transcript:hover {
   opacity: 1;
@@ -178,9 +188,9 @@ body:hover {
 }
 
 .transcript-text {
-  margin: 5px auto;
-  width: 90%;
+  margin: 5px 0;
   padding: 10px 15px;
+  width: fit-content;
   border-radius: 15px;
   font-size: 0.7rem;
   line-height: 1rem;
@@ -188,7 +198,7 @@ body:hover {
 }
 
 @media (max-width: 600px) {
-  .transcript-text {
+  #transcript {
     width: 70%;
   }
 }
