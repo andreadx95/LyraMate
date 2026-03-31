@@ -166,7 +166,7 @@ body:hover {
   padding: 0px;
   z-index: 10;
 /*   display: none; */
-  max-height: 150px;
+  max-height: 30%;
   overflow-y: auto;
   scrollbar-width: none; /* hide */
   opacity: 1;
