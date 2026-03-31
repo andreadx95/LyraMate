@@ -163,6 +163,11 @@ async function sendAudioToBackend(audioBlob) {
       addTranscriptEntry(dataTranscription.transcription, true);
     }
 
+    if (dataTranscription.transcription === "") {
+      avatar.setAnimationState("idle");
+      return;
+    }
+
     formData.append("text", dataTranscription.transcription);
 
     const LLMResponse = await fetch(`${API_URL}/voice-chat`, {
