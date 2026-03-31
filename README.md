@@ -20,8 +20,9 @@ Everything runs locally — no cloud APIs, no data leaves your machine.
 
 - **Voice conversation** — hold Shift+Space (or the mic button) to speak.
 - **Vision / Multimodal** — drag-and-drop images, paste from clipboard, or use your webcam. (Works only with multimodal models Gemma 3, Qwen 2.5 VL, etc.)  
-- **Desktop automation** — the LLM generates Python code to open browsers, create files, read clipboard, install packages, and more  
-- **3D animated avatar** — VRM model with idle, listening, speaking, thinking, and grabbing animation states, smooth transitions, blink sync, and viseme-based lip-sync  
+- **Screen Share** — You can share your screen and let the LLM analyze it. (Works only with multimodal models Gemma 3, Qwen 2.5 VL, etc.)  
+- **Desktop automation** — the LLM generates Python code to open browsers, create files, read clipboard, and more... 
+- **3D animated avatar** — VRM model with idle, listening, speaking, thinking, and grabbing animation states, smooth transitions
 - **Fully offline** — LLM (Ollama), STT (faster-whisper), TTS (Piper) all run locally  
 - **Multi-language** — configurable language for both STT and TTS
 
