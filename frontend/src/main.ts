@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import Avatar from "./avatar.ts";
 import { WebcamManager } from "./webcam.ts";
+import { ScreenShareManager } from "./screen.ts";
 import { AudioRecorder } from "./audio.ts";
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
 
@@ -19,7 +20,9 @@ const loadingDiv: HTMLElement = document.getElementById("loading");
 const dropZone: HTMLElement = document.getElementById('vrm-canvas');
 const imageElement: HTMLImageElement = document.getElementById("image-element") as HTMLImageElement;
 const webcamBtn: HTMLElement = document.getElementById("webcam-btn");
+const screenShareBtn: HTMLElement = document.getElementById("screen-share-btn");
 const webcamVideo: HTMLVideoElement = document.getElementById("webcam") as HTMLVideoElement;
+const screenShareVideo: HTMLVideoElement = document.getElementById("screen-share") as HTMLVideoElement;
 const settingsBtn: HTMLElement = document.getElementById("settings-btn");
 const settingsOverlay: HTMLElement = document.getElementById("settings-overlay");
 const settingsSaveBtn: HTMLElement = document.getElementById("settings-save-btn");
@@ -37,7 +40,24 @@ const webcam = new WebcamManager(
   document.getElementById("vrm-canvas"),
   savedDeviceId
 );
-
+const screenShare = new ScreenShareManager(
+  screenShareVideo,
+  document.getElementById("vrm-canvas"),
+  {
+    callbacks: {
+      onStart: () => {
+        screenShareBtn.classList.add("active");
+      },
+      onStop: () => {
+        screenShareBtn.classList.remove("active");
+      },
+      onError: (error) => {
+        console.error("Screen share error:", error);
+        screenShareBtn.classList.remove("active");
+      },
+    },
+  }
+);
 const recorder = new AudioRecorder({
   deviceId: localStorage.getItem("mic_device_id") || undefined,
   onStart: () => {
@@ -66,12 +86,26 @@ window.addEventListener("resize", () => {
 });
 
 async function toggleCamera() {
+  if (!webcam.isActive && screenShare.isActive) {
+    screenShare.stop();
+  }
+
   await webcam.toggle();
   avatar.camera.aspect = avatar.canvas.clientWidth / avatar.canvas.clientHeight;
   avatar.camera.updateProjectionMatrix();
   avatar.renderer.setSize(avatar.canvas.clientWidth, avatar.canvas.clientHeight);
 }
 
+async function toggleScreenShare() {
+  if (!screenShare.isActive && webcam.isActive) {
+    webcam.stop();
+  }
+
+  await screenShare.toggle();
+  avatar.camera.aspect = avatar.canvas.clientWidth / avatar.canvas.clientHeight;
+  avatar.camera.updateProjectionMatrix();
+  avatar.renderer.setSize(avatar.canvas.clientWidth, avatar.canvas.clientHeight);
+}
 
 
 
@@ -91,7 +125,13 @@ async function sendAudioToBackend(audioBlob) {
   const formData = new FormData();
   audioData.append("audio", audioBlob, "recording.wav");
 
-  if (webcam.isActive && imageObject === null) {
+  // Priority: screen share frame > webcam frame > dropped/pasted image
+  if (screenShare.isActive && imageObject === null) {
+    const frameBlob = await screenShare.captureFrame();
+    if (frameBlob) {
+      formData.append("image", frameBlob, "screen_frame.jpg");
+    }
+  } else if (webcam.isActive && imageObject === null) {
     const frameBlob = await webcam.captureFrame();
     if (frameBlob) {
       formData.append("image", frameBlob, "webcam_frame.jpg");
@@ -146,13 +186,6 @@ async function sendAudioToBackend(audioBlob) {
     }
 
 
-    // Torna a idle dopo il parlato
-    setTimeout(
-      () => {
-        avatar.setAnimationState("idle");
-      },
-      data.response.length * 60 + 500,
-    );
   } catch (error) {
     console.error("Errore comunicazione backend:", error);
     statusDiv.classList.remove("processing");
@@ -211,6 +244,16 @@ document.addEventListener("keyup", (e) => {
     stopRecording();
   }
 });
+
+audioPlayer.addEventListener("pause", () => {
+  avatar.setAnimationState("idle");
+});
+
+
+audioPlayer.addEventListener("ended", () => {
+  avatar.setAnimationState("idle");
+});
+
 
 setupTauriShortcut();
 
@@ -277,7 +320,9 @@ webcamBtn.addEventListener("click", () => {
   toggleCamera();
 });
 
-
+screenShareBtn.addEventListener("click", () => {
+  toggleScreenShare();
+});
 
 // ========== SETTINGS ==========
 async function populateWebcamSelect() {

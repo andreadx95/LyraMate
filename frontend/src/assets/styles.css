@@ -50,7 +50,8 @@ body:hover {
   z-index: 1;
 }
 
-#vrm-canvas.webcam-active {
+#vrm-canvas.webcam-active,
+#vrm-canvas.screen-share-active {
   max-height: 50%;
   border: 1px solid rgba(255, 255, 255, 0.267);
   background: url(/assets/room.png);
@@ -90,7 +91,8 @@ body:hover {
   display: none;
 }
 
-#webcam {
+#webcam,
+#screen-share {
   border-radius: 15px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.267);
