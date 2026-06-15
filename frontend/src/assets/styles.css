@@ -83,6 +83,22 @@ body:hover {
   height: 15px;
 }
 
+#controls .text-button {
+  font-size: 8px;
+  line-height: 15px;
+  text-align: center;
+  border-radius: 3px;
+  border: 1px solid #d9e6ff;
+  color: #2f5dac;
+  user-select: none;
+}
+
+#controls .text-button.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #ffffff;
+}
+
 #controls:hover .hidden-commands {
   display: block;
 }
@@ -165,7 +181,7 @@ body:hover {
   margin: 0 auto;
   padding: 0px;
   z-index: 10;
-/*   display: none; */
+  /*   display: none; */
   max-height: 30%;
   overflow-y: auto;
   scrollbar-width: none; /* hide */
@@ -220,6 +236,29 @@ body:hover {
   -ms-overflow-style: none; /* per IE e Edge Legacy */
   max-width: 500px;
 }
+
+.show-code-btn {
+  background: transparent;
+  border: none;
+  margin-left: 10px;
+  font-size: 0.7rem;
+  background-color: var(--primary-color);
+  top: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: white;
+}
+.code-block {
+  display: none;
+  background: var(--background-color);
+  color: var(--text-color);
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 8px;
+  font-size: 0.6rem;
+  overflow-x: auto;
+}
+
 #loading {
   position: fixed;
   top: 50%;

@@ -187,7 +187,7 @@ async function sendAudioToBackend(audioBlob) {
     }
 
     if (data.response) {
-      addTranscriptEntry(data.response, false);
+      addTranscriptEntry(data.response, false , data.code);
     }
 
 
@@ -200,11 +200,25 @@ async function sendAudioToBackend(audioBlob) {
 }
 
 
-function addTranscriptEntry(text, isUser = true) {
+function addTranscriptEntry(text, isUser = true, code = null) {
   if (!text) return;
   const entry = document.createElement("div");
   entry.className = `transcript-text tilt-in-fwd-tr ${isUser ? "user-text" : "ai-text"}`;
   entry.textContent = text;
+  if (code) {
+    const showCodeBtn = document.createElement("button");
+    showCodeBtn.textContent = "</>";
+    showCodeBtn.className = "show-code-btn";
+    showCodeBtn.addEventListener("click", () => {
+      codeBlock.style.display = codeBlock.style.display === "block" ? "none" : "block";
+    });
+    entry.appendChild(showCodeBtn);
+    const codeBlock = document.createElement("pre");
+    codeBlock.className = "code-block";
+    codeBlock.style.display = "none";
+    codeBlock.textContent = code;
+    entry.appendChild(codeBlock);
+  }
   transcriptDiv.appendChild(entry);
   transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
 }
