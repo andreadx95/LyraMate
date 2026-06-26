@@ -4,6 +4,7 @@ import { WebcamManager } from "./webcam.ts";
 import { ScreenShareManager } from "./screen.ts";
 import { AudioRecorder } from "./audio.ts";
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // ========== CONFIG ==========
 const DEFAULT_API_URL: string = "http://localhost:8000";
@@ -113,7 +114,7 @@ async function toggleScreenShare() {
 async function startRecording() {
   audioPlayer.pause();
   avatar.doLipSync('', null);
-  await recorder.start();  
+  await recorder.start();
 }
 
 function stopRecording() {
@@ -187,7 +188,7 @@ async function sendAudioToBackend(audioBlob) {
     }
 
     if (data.response) {
-      addTranscriptEntry(data.response, false , data.code);
+      addTranscriptEntry(data.response, false, data.code);
     }
 
 
@@ -275,6 +276,7 @@ audioPlayer.addEventListener("ended", () => {
 
 
 setupTauriShortcut();
+setupCtrlPointerWindowDrag();
 
 // Prevent default drag behaviors
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -439,9 +441,9 @@ async function setupTauriShortcut() {
   // Tauri global shortcut: Shift + Space to speak
   try {
     try {
-      await unregister('Shift+Space'); 
-    } catch {
-     
+      await unregister('Shift+Space');
+    } catch (error) {
+      console.warn('No previous shortcut to unregister:', error);
     }
 
     await register('Shift+Space', (event) => {
@@ -455,4 +457,66 @@ async function setupTauriShortcut() {
   } catch (error) {
     console.error('Errore registrazione shortcut:', error);
   }
+}
+
+function setupCtrlPointerWindowDrag() {
+  const appWindow = getCurrentWindow();
+  const MOVE_THRESHOLD_PX = 8;
+  const NO_DRAG_SELECTOR =
+    "#controls, #settings-overlay, #settings-modal, #transcript, #webcam, #screen-share, button, input, select, textarea, a, [data-no-drag]";
+
+  let activePointerId: number | null = null;
+  let startX = 0;
+  let startY = 0;
+  let dragTriggered = false;
+
+  const clearDragState = () => {
+    activePointerId = null;
+    dragTriggered = false;
+  };
+
+  const isDraggablePressTarget = (target: EventTarget | null): boolean => {
+    if (!(target instanceof Element)) return false;
+    return !target.closest(NO_DRAG_SELECTOR);
+  };
+
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    if (!isDraggablePressTarget(e.target)) return;
+
+    clearDragState();
+    activePointerId = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+  });
+
+  document.addEventListener("pointermove", async (e) => {
+    if (activePointerId !== e.pointerId) return;
+    if (dragTriggered) return;
+    if ((e.buttons & 1) !== 1) return;
+    if (!e.ctrlKey) return;
+
+    const movedEnough = Math.hypot(e.clientX - startX, e.clientY - startY) > MOVE_THRESHOLD_PX;
+    if (!movedEnough) return;
+
+    dragTriggered = true;
+    try {
+      await appWindow.startDragging();
+    } catch (error) {
+      console.error("Unable to start window dragging:", error);
+      clearDragState();
+    }
+  });
+
+  document.addEventListener("pointerup", (e) => {
+    if (activePointerId === e.pointerId) {
+      clearDragState();
+    }
+  });
+
+  document.addEventListener("pointercancel", (e) => {
+    if (activePointerId === e.pointerId) {
+      clearDragState();
+    }
+  });
 }
