@@ -1,6 +1,6 @@
 import os
 import ollama
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Iterator
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -88,6 +88,55 @@ class LLM:
     def reset_conversation(self):
         """Reset conversation"""
         self.conversation_history = []
+
+    def chat_stream(self, user_message: str, images: Optional[List[str]] = None) -> Iterator[str]:
+        """Stream model output chunk-by-chunk while preserving chat history."""
+        user_entry = {
+            "role": "user",
+            "content": user_message
+        }
+        if images:
+            user_entry["images"] = images
+        self.conversation_history.append(user_entry)
+
+        messages = [
+            {"role": "system", "content": self.system_prompt}
+        ] + self.conversation_history
+
+        if not self.available:
+            fallback = "LLM model is unavailable. Ollama is not running."
+            self.conversation_history.append({"role": "assistant", "content": fallback})
+            yield fallback
+            return
+
+        try:
+            chunks: List[str] = []
+            stream = ollama.chat(
+                model=self.model,
+                messages=messages,
+                stream=True,
+            )
+
+            for part in stream:
+                content = part.get("message", {}).get("content", "")
+                if content:
+                    chunks.append(content)
+                    yield content
+
+            assistant_text = "".join(chunks)
+            self.conversation_history.append({"role": "assistant", "content": assistant_text})
+
+        except ConnectionError:
+            self.available = False
+            print("❌ Connection to Ollama lost. Restart Ollama with: ollama serve")
+            fallback = "Lost connection to Ollama. Restart it and try again."
+            self.conversation_history.append({"role": "assistant", "content": fallback})
+            yield fallback
+        except Exception as e:
+            print(f"❌ LLM Stream Error: {e}")
+            fallback = "Sorry, I had a problem. Can you repeat?"
+            self.conversation_history.append({"role": "assistant", "content": fallback})
+            yield fallback
     
 
     async def chat_async(self, user_message: str, images: Optional[List[str]] = None) -> Dict[str, Any]:

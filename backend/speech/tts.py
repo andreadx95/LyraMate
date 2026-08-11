@@ -17,6 +17,8 @@ class TextToSpeech:
         self.voice = voice
         self.models_dir = Path(__file__).parent.parent / "models" / "piper"
         self.models_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_audio_dir = Path(__file__).parent.parent / "temp_audio"
+        self.temp_audio_dir.mkdir(parents=True, exist_ok=True)
         
         # Model Paths
         self.model_path = self.models_dir / f"{voice}.onnx"
@@ -102,6 +104,27 @@ To download model {self.voice}:
         """Async version — runs TTS in a thread pool."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(_tts_pool, self.synthesize, text, output_file)
+
+    def synthesize_bytes(self, text: str) -> bytes:
+        """Generate a WAV in a temp file and return its raw bytes."""
+        with tempfile.NamedTemporaryFile(
+            suffix=".wav",
+            delete=False,
+            dir=str(self.temp_audio_dir),
+            prefix="ws_chunk_",
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+
+        try:
+            self.synthesize(text, output_file=str(temp_path), play=False)
+            return temp_path.read_bytes()
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    async def synthesize_bytes_async(self, text: str) -> bytes:
+        """Async wrapper for synthesize_bytes."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_tts_pool, self.synthesize_bytes, text)
     
     def sanitize_text(self, text):
         # Rimuove emoji e simboli non ASCII

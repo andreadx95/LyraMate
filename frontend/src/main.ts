@@ -33,6 +33,10 @@ const micSelect: HTMLSelectElement = document.getElementById("mic-select") as HT
 
 // ========== STATE ==========
 let imageObject: File = null;
+let latestRequestId = 0;
+let activeStreamSession: { cancel: () => void } | null = null;
+let suppressIdleOnAudioEvents = false;
+let activeResponseBubble: HTMLDivElement | null = null;
 
 const avatar = new Avatar("vrm-canvas", VRM_MODEL_PATH, loadingDiv);
 const savedDeviceId = localStorage.getItem("webcam_device_id") || undefined;
@@ -112,6 +116,7 @@ async function toggleScreenShare() {
 
 // ========== AUDIO RECORDING ==========
 async function startRecording() {
+  cancelActiveResponse();
   audioPlayer.pause();
   avatar.doLipSync('', null);
   await recorder.start();
@@ -122,23 +127,29 @@ function stopRecording() {
 }
 
 async function sendAudioToBackend(audioBlob) {
+  const requestId = ++latestRequestId;
+  cancelActiveResponse();
   const audioData = new FormData();
   const formData = new FormData();
   audioData.append("audio", audioBlob, "recording.wav");
+  let imageBase64: string | null = null;
 
   // Priority: screen share frame > webcam frame > dropped/pasted image
   if (screenShare.isActive && imageObject === null) {
     const frameBlob = await screenShare.captureFrame();
     if (frameBlob) {
       formData.append("image", frameBlob, "screen_frame.jpg");
+      imageBase64 = await blobToBase64(frameBlob);
     }
   } else if (webcam.isActive && imageObject === null) {
     const frameBlob = await webcam.captureFrame();
     if (frameBlob) {
       formData.append("image", frameBlob, "webcam_frame.jpg");
+      imageBase64 = await blobToBase64(frameBlob);
     }
   } else if (imageObject) {
     formData.append("image", imageObject, imageObject.name);
+    imageBase64 = await blobToBase64(imageObject);
   }
 
   try {
@@ -154,8 +165,16 @@ async function sendAudioToBackend(audioBlob) {
       throw new Error(`HTTP error! status: ${transcriptionResponse.status}`);
     }
 
+    if (requestId !== latestRequestId) {
+      return;
+    }
+
     const dataTranscription = await transcriptionResponse.json();
     console.log("Risposta backend:", dataTranscription);
+
+    if (requestId !== latestRequestId) {
+      return;
+    }
 
     statusDiv.classList.remove("processing");
 
@@ -170,34 +189,136 @@ async function sendAudioToBackend(audioBlob) {
     }
 
     formData.append("text", dataTranscription.transcription);
-
-    const LLMResponse = await fetch(`${API_URL}/voice-chat`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!LLMResponse.ok) {
-      throw new Error(`HTTP error! status: ${LLMResponse.status}`);
-    }
-    const data = await LLMResponse.json();
-
-    // Riproduci audio risposta e avvia lip sync
-    if (data.audio_file) {
-      avatar.setAnimationState("speaking");
-      playAudio(`${API_URL}${data.audio_file}`);
-      avatar.doLipSync(data.response, audioPlayer);
-    }
-
-    if (data.response) {
-      addTranscriptEntry(data.response, false, data.code);
+    try {
+      let latestPartialText = "";
+      const streamResult = await streamVoiceChat(
+        dataTranscription.transcription,
+        imageBase64,
+        (partialText) => {
+          latestPartialText = partialText || "";
+          if (requestId !== latestRequestId) {
+            return;
+          }
+          if (activeResponseBubble) {
+            activeResponseBubble.textContent = partialText;
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+          }
+        },
+        () => {
+          if (requestId !== latestRequestId) {
+            return;
+          }
+          if (!activeResponseBubble) {
+            activeResponseBubble = createStreamingResponseBubble();
+            activeResponseBubble.textContent = latestPartialText;
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+          }
+        }
+      );
+      if (requestId !== latestRequestId) {
+        activeResponseBubble = null;
+        return;
+      }
+      if (streamResult.response) {
+        if (activeResponseBubble) {
+          finalizeStreamingResponseBubble(activeResponseBubble, streamResult.response, streamResult.code);
+          activeResponseBubble = null;
+        } else {
+          addTranscriptEntry(streamResult.response, false, streamResult.code);
+        }
+      }
+    } catch (streamError) {
+      if (streamError instanceof Error && streamError.message === "stream_cancelled") {
+        activeResponseBubble = null;
+        return;
+      }
+      if (requestId !== latestRequestId) {
+        activeResponseBubble = null;
+        return;
+      }
+      removeActiveResponseBubble();
+      console.warn("Streaming failed, using /voice-chat fallback:", streamError);
+      const LLMResponse = await fetch(`${API_URL}/voice-chat`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!LLMResponse.ok) {
+        throw new Error(`HTTP error! status: ${LLMResponse.status}`);
+      }
+      const data = await LLMResponse.json();
+      if (requestId !== latestRequestId) {
+        return;
+      }
+      if (data.audio_file) {
+        avatar.setAnimationState("speaking");
+        playAudio(`${API_URL}${data.audio_file}`);
+        avatar.doLipSync(data.response, audioPlayer);
+      }
+      if (data.response) {
+        addTranscriptEntry(data.response, false, data.code);
+      }
     }
 
 
   } catch (error) {
+    if (error instanceof Error && error.message === "stream_cancelled") {
+      return;
+    }
+    if (requestId !== latestRequestId) {
+      return;
+    }
     console.error("Errore comunicazione backend:", error);
     statusDiv.classList.remove("processing");
     avatar.setAnimationState("idle");
     addTranscriptEntry("❌ Mmm, something went wrong...", false);
   }
+}
+
+function cancelActiveResponse(): void {
+  suppressIdleOnAudioEvents = false;
+  if (activeStreamSession) {
+    activeStreamSession.cancel();
+    activeStreamSession = null;
+  }
+  activeResponseBubble = null;
+  audioPlayer.pause();
+  audioPlayer.removeAttribute("src");
+  audioPlayer.load();
+  avatar.setAnimationState("idle");
+}
+
+function createStreamingResponseBubble(): HTMLDivElement {
+  const entry = document.createElement("div");
+  entry.className = "transcript-text tilt-in-fwd-tr ai-text";
+  transcriptDiv.appendChild(entry);
+  transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+  return entry;
+}
+
+function finalizeStreamingResponseBubble(entry: HTMLDivElement, text: string, code: string | null = null): void {
+  entry.textContent = text;
+  if (code) {
+    const showCodeBtn = document.createElement("button");
+    showCodeBtn.textContent = "</>";
+    showCodeBtn.className = "show-code-btn";
+    showCodeBtn.addEventListener("click", () => {
+      codeBlock.style.display = codeBlock.style.display === "block" ? "none" : "block";
+    });
+    entry.appendChild(showCodeBtn);
+    const codeBlock = document.createElement("pre");
+    codeBlock.className = "code-block";
+    codeBlock.style.display = "none";
+    codeBlock.textContent = code;
+    entry.appendChild(codeBlock);
+  }
+  transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+}
+
+function removeActiveResponseBubble(): void {
+  if (activeResponseBubble && activeResponseBubble.parentNode) {
+    activeResponseBubble.parentNode.removeChild(activeResponseBubble);
+  }
+  activeResponseBubble = null;
 }
 
 
@@ -227,6 +348,195 @@ function addTranscriptEntry(text, isUser = true, code = null) {
 function playAudio(audioUrl) {
   audioPlayer.src = audioUrl;
   audioPlayer.play();
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = String(reader.result || "");
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function base64ToWavBlob(base64: string): Blob {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: "audio/wav" });
+}
+
+function buildWsUrl(path: string): string {
+  const url = new URL(API_URL);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = path;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+async function streamVoiceChat(
+  text: string,
+  imageBase64: string | null,
+  onTextChunk?: (partialText: string) => void,
+  onFirstAudioChunk?: () => void
+): Promise<{ response: string; code: string | null }> {
+  const wsUrl = buildWsUrl("/ws/voice-stream");
+
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(wsUrl);
+    const chunkQueue: Array<{ url: string; text: string }> = [];
+    const createdUrls: string[] = [];
+    let fullResponse = "";
+    let finalCode: string | null = null;
+    let doneReceived = false;
+    let isPlaying = false;
+    let settled = false;
+    let canceled = false;
+    let firstAudioChunkNotified = false;
+
+    const session = {
+      cancel: () => {
+        canceled = true;
+        cleanup();
+        if (!settled) {
+          settled = true;
+          reject(new Error("stream_cancelled"));
+        }
+      },
+    };
+    activeStreamSession = session;
+
+    const cleanup = () => {
+      suppressIdleOnAudioEvents = false;
+      audioPlayer.removeEventListener("ended", onChunkEnded);
+      for (const url of createdUrls) {
+        URL.revokeObjectURL(url);
+      }
+      if (activeStreamSession === session) {
+        activeStreamSession = null;
+      }
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
+
+    const finalizeIfDone = () => {
+      if (doneReceived && !isPlaying && chunkQueue.length === 0) {
+        suppressIdleOnAudioEvents = false;
+        cleanup();
+        avatar.setAnimationState("idle");
+        if (!settled) {
+          settled = true;
+          resolve({ response: fullResponse.trim(), code: finalCode });
+        }
+      }
+    };
+
+    const playNextChunk = () => {
+      if (isPlaying || chunkQueue.length === 0) {
+        finalizeIfDone();
+        return;
+      }
+
+      const next = chunkQueue.shift();
+      if (!next) {
+        finalizeIfDone();
+        return;
+      }
+
+      isPlaying = true;
+      if (!suppressIdleOnAudioEvents) {
+        avatar.setAnimationState("speaking");
+      }
+      suppressIdleOnAudioEvents = true;
+      audioPlayer.src = next.url;
+      avatar.doLipSync(next.text, audioPlayer);
+      audioPlayer.play().catch((error) => {
+        console.error("Audio chunk play error:", error);
+        isPlaying = false;
+        playNextChunk();
+      });
+    };
+
+    const onChunkEnded = () => {
+      isPlaying = false;
+      playNextChunk();
+    };
+
+    audioPlayer.addEventListener("ended", onChunkEnded);
+
+    ws.onopen = () => {
+      ws.send(
+        JSON.stringify({
+          text,
+          image: imageBase64,
+        })
+      );
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === "error") {
+        cleanup();
+        reject(new Error(msg.error || "Streaming backend error"));
+        return;
+      }
+
+      if (msg.type === "text_chunk") {
+        fullResponse += msg.chunk || "";
+        onTextChunk?.(fullResponse);
+        return;
+      }
+
+      if (msg.type === "audio_chunk" && msg.audio_b64) {
+        if (!firstAudioChunkNotified) {
+          firstAudioChunkNotified = true;
+          onFirstAudioChunk?.();
+        }
+        const blob = base64ToWavBlob(msg.audio_b64);
+        const objectUrl = URL.createObjectURL(blob);
+        createdUrls.push(objectUrl);
+        chunkQueue.push({ url: objectUrl, text: msg.text || "" });
+        playNextChunk();
+        return;
+      }
+
+      if (msg.type === "done") {
+        doneReceived = true;
+        finalCode = msg.code || null;
+        fullResponse = msg.response || fullResponse;
+        onTextChunk?.(fullResponse);
+        finalizeIfDone();
+      }
+    };
+
+    ws.onerror = () => {
+      cleanup();
+      if (!settled && !canceled) {
+        settled = true;
+        reject(new Error("WebSocket connection error"));
+      }
+    };
+
+    ws.onclose = () => {
+      if (canceled) {
+        return;
+      }
+      if (!doneReceived && !settled) {
+        cleanup();
+        settled = true;
+        reject(new Error("WebSocket closed before response completed"));
+      }
+    };
+  });
 }
 
 // ========== LIP SYNC (Advanced with visemes) ==========
@@ -266,11 +576,13 @@ document.addEventListener("keyup", (e) => {
 });
 
 audioPlayer.addEventListener("pause", () => {
+  if (suppressIdleOnAudioEvents) return;
   avatar.setAnimationState("idle");
 });
 
 
 audioPlayer.addEventListener("ended", () => {
+  if (suppressIdleOnAudioEvents) return;
   avatar.setAnimationState("idle");
 });
 

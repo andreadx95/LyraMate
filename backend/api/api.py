@@ -3,6 +3,7 @@ from pydoc import text
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 import uvicorn
 from pathlib import Path
@@ -10,6 +11,7 @@ import os
 import sys
 import ast
 import base64
+import re
 from typing import Optional
 import uuid
 from dotenv import load_dotenv
@@ -91,6 +93,37 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     audio_file: str = None
+
+
+def _drain_tts_segments(buffer: str):
+    """Return complete sentence-like segments and remainder."""
+    first_chunk_target = int(os.getenv("STREAM_TTS_FIRST_CHUNK_CHARS", "70"))
+    next_chunk_target = int(os.getenv("STREAM_TTS_CHUNK_CHARS", "120"))
+
+    # Prefer early splits on strong punctuation and line breaks.
+    parts = re.split(r"(?<=[.!?])\s+|\n+", buffer)
+    if len(parts) <= 1:
+        # If no strong punctuation yet, allow earlier chunking by softer separators.
+        if len(buffer) >= first_chunk_target:
+            soft_split = max(
+                buffer.rfind(",", 0, first_chunk_target),
+                buffer.rfind(";", 0, first_chunk_target),
+                buffer.rfind(":", 0, first_chunk_target),
+            )
+            if soft_split > 20:
+                return [buffer[: soft_split + 1].strip()], buffer[soft_split + 1 :]
+
+        # Fallback: split by nearest whitespace around target lengths.
+        if len(buffer) >= first_chunk_target and " " in buffer:
+            split_target = first_chunk_target
+            split_at = buffer.rfind(" ", 0, split_target)
+            if split_at < 20 and len(buffer) >= next_chunk_target:
+                split_target = next_chunk_target
+                split_at = buffer.rfind(" ", 0, split_target)
+            if split_at > 20:
+                return [buffer[:split_at].strip()], buffer[split_at + 1 :]
+        return [], buffer
+    return [p.strip() for p in parts[:-1] if p.strip()], parts[-1]
 
 # === ENDPOINTS ===
 
@@ -203,7 +236,12 @@ async def get_audio(filename: str):
     if not str(file_path).startswith(str(TEMP_AUDIO_DIR.resolve())):
         return {"error": "Invalid filename"}
     if file_path.exists():
-        return FileResponse(file_path, media_type="audio/wav")
+        # Delete temp response audio once the response is sent.
+        return FileResponse(
+            file_path,
+            media_type="audio/wav",
+            background=BackgroundTask(lambda: file_path.unlink(missing_ok=True)),
+        )
     return {"error": "File not found"}
 
 @app.post("/reset")
@@ -244,6 +282,117 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
     except WebSocketDisconnect:
         print("Client disconnected")
+
+
+@app.websocket("/ws/voice-stream")
+async def websocket_voice_stream(websocket: WebSocket):
+    """Stream LLM text and TTS audio chunks with low latency."""
+    await websocket.accept()
+
+    if llm is None:
+        await websocket.send_json({"type": "error", "error": "LLM unavailable. Make sure Ollama is running."})
+        await websocket.close()
+        return
+
+    if tts is None:
+        await websocket.send_json({"type": "error", "error": "TTS unavailable. Piper could not be loaded."})
+        await websocket.close()
+        return
+
+    try:
+        while True:
+            payload = await websocket.receive_json()
+            user_message = payload.get("text", "") or ""
+            image_b64 = payload.get("image")
+
+            if "reset" in user_message.lower():
+                llm.reset_conversation()
+                await websocket.send_json({"type": "done", "response": "Conversation reset!", "code": None})
+                continue
+
+            stream_kwargs = {}
+            if image_b64:
+                stream_kwargs["images"] = [image_b64]
+
+            full_response_parts = []
+            sequence = 0
+
+            for chunk in llm.chat_stream(user_message, **stream_kwargs):
+                full_response_parts.append(chunk)
+                await websocket.send_json({"type": "text_chunk", "chunk": chunk})
+
+            response_text = "".join(full_response_parts)
+            extracted_code = extract_code(response_text)
+
+            if isinstance(extracted_code, list) and extracted_code:
+                stdout, stderr = await run_ai_code_async(extracted_code[0])
+                message_result = stdout.replace("\n", "") if stdout else ""
+                message_result += f" (Error: {stderr.strip()})" if stderr else ""
+                execution_text = f"Ok {message_result}".strip()
+
+                await websocket.send_json({"type": "text_chunk", "chunk": execution_text})
+
+                try:
+                    audio_bytes = await tts.synthesize_bytes_async(execution_text)
+                    await websocket.send_json(
+                        {
+                            "type": "audio_chunk",
+                            "seq": sequence,
+                            "text": execution_text,
+                            "audio_b64": base64.b64encode(audio_bytes).decode("ascii"),
+                        }
+                    )
+                    sequence += 1
+                except Exception as e:
+                    print(f"TTS Execution Chunk Error: {e}")
+
+                response_text = execution_text
+
+            # Speak only the final response (mirrors /voice-chat behavior, no hardcoded intent heuristics)
+            tts_pending = response_text
+            ready_segments, tts_pending = _drain_tts_segments(tts_pending)
+            for segment in ready_segments:
+                if not segment:
+                    continue
+                try:
+                    audio_bytes = await tts.synthesize_bytes_async(segment)
+                    await websocket.send_json(
+                        {
+                            "type": "audio_chunk",
+                            "seq": sequence,
+                            "text": segment,
+                            "audio_b64": base64.b64encode(audio_bytes).decode("ascii"),
+                        }
+                    )
+                    sequence += 1
+                except Exception as e:
+                    print(f"TTS Stream Final Error: {e}")
+
+            if tts_pending.strip():
+                try:
+                    audio_bytes = await tts.synthesize_bytes_async(tts_pending.strip())
+                    await websocket.send_json(
+                        {
+                            "type": "audio_chunk",
+                            "seq": sequence,
+                            "text": tts_pending.strip(),
+                            "audio_b64": base64.b64encode(audio_bytes).decode("ascii"),
+                        }
+                    )
+                except Exception as e:
+                    print(f"TTS Stream Final Tail Error: {e}")
+
+            await websocket.send_json(
+                {
+                    "type": "done",
+                    "response": response_text,
+                    "code": extracted_code[0] if isinstance(extracted_code, list) and extracted_code else None,
+                }
+            )
+    except WebSocketDisconnect:
+        print("Voice stream client disconnected")
+    except Exception as e:
+        print(f"Voice stream websocket error: {e}")
 
 # Run server
 if __name__ == "__main__":
